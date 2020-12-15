@@ -1,0 +1,24 @@
+{
+    "name": "htmlpet/magento2-elasticsuite-virtual-category-widget",
+    "description": "Magento 2 module to better glue elasticsuite virtual category and widgets",
+    "keywords": ["magento", "elasticsuite", "widget"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marush Denchev",
+            "homepage": "https://www.htmlpet.com/"
+        }
+    ],
+    "require": {
+        "php": "~7.1.3||~7.2.0",
+        "smile/elasticsuite": "^2.10"
+    },
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Htmlpet\\VirtualCategoryWidget\\": ""
+        }
+    }
+}
