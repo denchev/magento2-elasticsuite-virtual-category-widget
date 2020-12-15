@@ -128,9 +128,15 @@ class ProductsList extends BaseProductsList
      */
     private $categoryRepository;
 
+    /**
+     * @var Provider
+     */
     private $filterProvider;
 
-    private $elasticsearchCollectionFactory;
+    /**
+     * @var ElasticsuiteCollectionFactory
+     */
+    private $elasticsuiteCollectionFactory;
 
     /**
      * @param Context $context
@@ -175,6 +181,10 @@ class ProductsList extends BaseProductsList
         $this->urlEncoder = $urlEncoder ?: ObjectManager::getInstance()->get(EncoderInterface::class);
         $this->categoryRepository = $categoryRepository ?? ObjectManager::getInstance()
                 ->get(CategoryRepositoryInterface::class);
+
+        $this->filterProvider = $filterProvider;
+        $this->elasticsuiteCollectionFactory = $elasticsuiteCollectionFactory;
+
         parent::__construct(
             $context,
             $productCollectionFactory,
@@ -189,9 +199,6 @@ class ProductsList extends BaseProductsList
             $urlEncoder = null,
             $categoryRepository = null
         );
-
-        $this->filterProvider = $filterProvider;
-        $this->elasticsearchCollectionFactory = $elasticsuiteCollectionFactory;
     }
     
     protected function getConditions()
@@ -233,34 +240,30 @@ class ProductsList extends BaseProductsList
         $replaceConditionsCandidates = [];
 
         foreach ($conditions as $key => $condition) {
-            if (!empty($condition['attribute'])) {
-                if ($condition['attribute'] == 'category_ids') {
-                    // Check if category is a virtual category
-                    if (array_key_exists('value', $condition)) {
-                        $categoryId = $condition['value'];
-                        $category = $this->categoryRepository->get($categoryId, $this->_storeManager->getStore()->getId());
+            if (!empty($condition['attribute']) && $condition['attribute'] == 'category_ids' 
+                && $condition['operator'] === '==' && array_key_exists('value', $condition)) {
 
-                        // Do the trick only if the category is virtual and the operator is "is".
-                        if ($category->getIsVirtualCategory() && $condition['operator'] === '==') {
+                $categoryId = $condition['value'];
+                $category = $this->categoryRepository->get($categoryId, $this->_storeManager->getStore()->getId());
 
-                            // All products that belongs to the category
-                            $products = [];
-                            
-                            $productCollection = $this->elasticsearchCollectionFactory->create([]);
-                            $productCollection->addQueryFilter($this->filterProvider->getQueryFilter($category));
+                // Do the trick only if the category is virtual and the operator is "is".
+                if ($category->getIsVirtualCategory()) {
 
-                            foreach($productCollection as $product) {
-                                $products[] = $product->getSku();
-                            }
-                            
-                            $replaceConditionsCandidates[$key] = [
-                                'type' => $condition['type'],
-                                'attribute' => 'sku',
-                                'operator' => '()',
-                                'value' => join(',', $products)
-                            ];
-                        }
+                    $products = [];
+
+                    // All products that belongs to the virtual category
+                    $productCollection = $this->getProductCollection($category);
+
+                    foreach($productCollection as $product) {
+                        $products[] = $product->getSku();
                     }
+                    
+                    $replaceConditionsCandidates[$key] = [
+                        'type' => $condition['type'],
+                        'attribute' => 'sku',
+                        'operator' => '()',
+                        'value' => join(',', $products)
+                    ];
                 }
             }
         }
@@ -270,6 +273,20 @@ class ProductsList extends BaseProductsList
         }
 
         return $conditions;
+    }
+
+    /**
+     * Get the product collection based on search within elasticsuite
+     * 
+     * @param \Magento\Catalog\Api\Data\CategoryInterface $category
+     * @return Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
+     */
+    private function getProductCollection(\Magento\Catalog\Api\Data\CategoryInterface $category)
+    {
+        $productCollection = $this->elasticsuiteCollectionFactory->create([]);
+        $productCollection->addQueryFilter($this->filterProvider->getQueryFilter($category));
+        
+        return $productCollection;
     }
 
     /**
