@@ -204,6 +204,32 @@ class ProductsList extends BaseProductsList
             $conditions = $this->conditionsHelper->decode($conditions);
         }
 
+        $conditions = $this->swapConditions($conditions);
+
+        foreach ($conditions as $key => $condition) {
+            if (!empty($condition['attribute'])) {
+                if (in_array($condition['attribute'], ['special_from_date', 'special_to_date'])) {
+                    $conditions[$key]['value'] = date('Y-m-d H:i:s', strtotime($condition['value']));
+                }
+
+                if ($condition['attribute'] == 'category_ids') {
+                    $conditions[$key] = $this->updateAnchorCategoryConditions($condition);
+                }
+            }
+        }
+
+        $this->rule->loadPost(['conditions' => $conditions]);
+        return $this->rule->getConditions();
+    }
+
+    /**
+     * Looks for specific patterns with the original conditions and swap them with alternative
+     * 
+     * @param array $conditions
+     * @return array
+     */
+    protected function swapConditions($conditions)
+    {
         $replaceConditionsCandidates = [];
 
         foreach ($conditions as $key => $condition) {
@@ -213,14 +239,15 @@ class ProductsList extends BaseProductsList
                     if (array_key_exists('value', $condition)) {
                         $categoryId = $condition['value'];
                         $category = $this->categoryRepository->get($categoryId, $this->_storeManager->getStore()->getId());
-                        if ($category->getIsVirtualCategory()) {
+
+                        // Do the trick only if the category is virtual and the operator is "is".
+                        if ($category->getIsVirtualCategory() && $condition['operator'] === '==') {
 
                             // All products that belongs to the category
                             $products = [];
                             
-                            $filterQuery = $this->getFilterQuery($category);
                             $productCollection = $this->elasticsearchCollectionFactory->create([]);
-                            $productCollection->addQueryFilter($filterQuery);
+                            $productCollection->addQueryFilter($this->filterProvider->getQueryFilter($category));
 
                             foreach($productCollection as $product) {
                                 $products[] = $product->getSku();
@@ -242,20 +269,7 @@ class ProductsList extends BaseProductsList
             $conditions = array_replace($conditions, $replaceConditionsCandidates);
         }
 
-        foreach ($conditions as $key => $condition) {
-            if (!empty($condition['attribute'])) {
-                if (in_array($condition['attribute'], ['special_from_date', 'special_to_date'])) {
-                    $conditions[$key]['value'] = date('Y-m-d H:i:s', strtotime($condition['value']));
-                }
-
-                if ($condition['attribute'] == 'category_ids') {
-                    $conditions[$key] = $this->updateAnchorCategoryConditions($condition);
-                }
-            }
-        }
-
-        $this->rule->loadPost(['conditions' => $conditions]);
-        return $this->rule->getConditions();
+        return $conditions;
     }
 
     /**
@@ -284,15 +298,5 @@ class ProductsList extends BaseProductsList
         }
 
         return $condition;
-    }
-
-    /**
-     * Current category filter query.
-     *
-     * @return \Smile\ElasticsuiteCore\Search\Request\QueryInterface
-     */
-    private function getFilterQuery($category)
-    {
-        return $this->filterProvider->getQueryFilter($category);
     }
 }
