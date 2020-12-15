@@ -201,6 +201,11 @@ class ProductsList extends BaseProductsList
         );
     }
     
+    /**
+     * Get conditions
+     *
+     * @return Combine
+     */
     protected function getConditions()
     {
         $conditions = $this->getData('conditions_encoded')
