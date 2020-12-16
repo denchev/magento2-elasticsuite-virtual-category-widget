@@ -245,15 +245,12 @@ class ProductsList extends BaseProductsList
         $replaceConditionsCandidates = [];
 
         foreach ($conditions as $key => $condition) {
-            if (!empty($condition['attribute']) && $condition['attribute'] == 'category_ids' 
-                && $condition['operator'] === '==' && array_key_exists('value', $condition)) {
-
+            if ($this->shouldReplace($condition)) {
                 $categoryId = $condition['value'];
                 $category = $this->categoryRepository->get($categoryId, $this->_storeManager->getStore()->getId());
 
                 // Do the trick only if the category is virtual and the operator is "is".
                 if ($category->getIsVirtualCategory()) {
-
                     $products = [];
 
                     // All products that belongs to the virtual category
@@ -278,6 +275,16 @@ class ProductsList extends BaseProductsList
         }
 
         return $conditions;
+    }
+
+    /**
+     * @param array $condition 
+     * @return bool
+     */
+    private function shouldReplace($condition)
+    {
+        return !empty($condition['attribute']) && $condition['attribute'] == 'category_ids' 
+        && $condition['operator'] === '==' && array_key_exists('value', $condition);
     }
 
     /**
